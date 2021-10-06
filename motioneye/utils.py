@@ -25,17 +25,24 @@ import re
 import socket
 import sys
 import time
-import urllib
-import urllib2
-import urlparse
 
 from PIL import Image, ImageDraw
+
+from six import ensure_text
+from six.moves.urllib import parse as urlparse
+from six.moves.urllib.parse import quote as urlquote
+from six.moves.urllib.request import urlopen as urllib_urlopen
 
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.iostream import IOStream
 from tornado.ioloop import IOLoop
 
-import settings
+from motioneye import settings
+
+try:
+    unicode  # Python 2
+except NameError:
+    unicode = str  # Python 3
 
 
 _SIGNATURE_REGEX = re.compile('[^a-zA-Z0-9/?_.=&{}\[\]":, -]')
@@ -252,7 +259,7 @@ def pretty_http_error(response):
     if not response.error:
         return 'ok'
 
-    msg = unicode(response.error)
+    msg = make_str(response.error)
     if msg.startswith('HTTP '):
         msg = msg.split(':', 1)[-1].strip()
 
@@ -266,33 +273,7 @@ def pretty_http_error(response):
 
 
 def make_str(s):
-    if isinstance(s, str):
-        return s
-
-    try:
-        return str(s)
-
-    except:
-        try:
-            return unicode(s, encoding='utf8').encode('utf8')
-
-        except:
-            return unicode(s).encode('utf8')
-
-
-def make_unicode(s):
-    if isinstance(s, unicode):
-        return s
-
-    try:
-        return unicode(s, encoding='utf8')
-
-    except:
-        try:
-            return unicode(s)
-
-        except:
-            return str(s).decode('utf8')
+    return ensure_text(s)
 
 
 def split_semicolon(s):
@@ -319,7 +300,7 @@ def get_disk_usage(path):
         result = os.statvfs(path)
 
     except OSError as e:
-        logging.error('failed to execute statvfs: %(msg)s' % {'msg': unicode(e)})
+        logging.error('failed to execute statvfs: %(msg)s' % {'msg': make_str(e)})
 
         return None
 
@@ -442,7 +423,7 @@ def test_mjpeg_url(data, auth_modes, allow_jpeg, callback):
 
 
 def test_rtsp_url(data, callback):
-    import motionctl
+    from motioneye import motionctl
 
     scheme = data.get('scheme', 'rtsp')
     host = data.get('host', '127.0.0.1')
@@ -500,6 +481,7 @@ def test_rtsp_url(data, callback):
         ]
 
         if username and send_auth[0]:
+            print('im here username [{}]'.format(username))
             auth_header = 'Authorization: ' + build_basic_header(username, password)
             lines.append(auth_header)
 
@@ -508,7 +490,7 @@ def test_rtsp_url(data, callback):
             ''
         ]
 
-        stream.write('\r\n'.join(lines))
+        stream.write('\r\n'.join(lines).encode('utf-8'))
 
         seek_rtsp()
 
@@ -516,17 +498,17 @@ def test_rtsp_url(data, callback):
         if check_error():
             return
 
-        stream.read_until_regex('RTSP/1.0 \d+ ', on_rtsp)
+        stream.read_until_regex(b'RTSP/1.0 \d+ ', on_rtsp)
         timeout[0] = io_loop.add_timeout(datetime.timedelta(seconds=settings.MJPG_CLIENT_TIMEOUT), on_rtsp)
 
     def on_rtsp(data=None):
         io_loop.remove_timeout(timeout[0])
 
         if data:
-            if data.endswith('200 '):
+            if data.endswith(b'200 '):
                 seek_server()
 
-            elif data.endswith('401 '):
+            elif data.endswith(b'401 '):
                 if not username or send_auth[0]:
                     # either credentials not supplied, or already sent
                     handle_error('authentication failed')
@@ -544,7 +526,7 @@ def test_rtsp_url(data, callback):
         if check_error():
             return
 
-        stream.read_until_regex('Server: .*', on_server)
+        stream.read_until_regex(b'Server: .*', on_server)
         timeout[0] = io_loop.add_timeout(datetime.timedelta(seconds=1), on_server)
 
     def on_server(data=None):
@@ -564,14 +546,14 @@ def test_rtsp_url(data, callback):
         if check_error():
             return
 
-        stream.read_until_regex('WWW-Authenticate: .*', on_www_authenticate)
+        stream.read_until_regex(b'WWW-Authenticate: .*', on_www_authenticate)
         timeout[0] = io_loop.add_timeout(datetime.timedelta(seconds=1), on_www_authenticate)
 
     def on_www_authenticate(data=None):
         io_loop.remove_timeout(timeout[0])
 
         if data:
-            scheme = re.findall('WWW-Authenticate: ([^\s]+)', data)[0].strip()
+            scheme = re.findall(b'WWW-Authenticate: ([^\s]+)', data)[0].strip()
             logging.debug('rtsp netcam auth scheme: %s' % scheme)
             if scheme.lower() == 'basic':
                 send_auth[0] = True
@@ -614,19 +596,19 @@ def test_rtsp_url(data, callback):
             return
 
         called[0] = True
-        logging.error('rtsp client error: %s' % unicode(e))
+        logging.error('rtsp client error: %s' % make_str(e))
 
         try:
             stream.close()
 
-        except:
+        except Exception:
             pass
 
-        callback(error=unicode(e))
+        callback(error=make_str(e))
 
     def check_error():
         error = getattr(stream, 'error', None)
-        if error and getattr(error, 'errno', None) != 0:
+        if error and getattr(error, 'strerror', None):
             handle_error(error.strerror)
             return True
 
@@ -641,8 +623,6 @@ def test_rtsp_url(data, callback):
     stream = connect()
 
 def test_rtmp_url(data, callback):
-    import motionctl
-
     scheme = data.get('scheme', 'rtmp')
     host = data.get('host', '127.0.0.1')
     port = data.get('port') or '1935'
@@ -670,7 +650,7 @@ def compute_signature(method, path, body, key):
     query = [q for q in urlparse.parse_qsl(parts[3], keep_blank_values=True) if (q[0] != '_signature')]
     query.sort(key=lambda q: q[0])
     # "safe" characters here are set to match the encodeURIComponent JavaScript counterpart
-    query = [(n, urllib.quote(v, safe="!'()*~")) for (n, v) in query]
+    query = [(n, urlquote(v, safe="!'()*~")) for (n, v) in query]
     query = '&'.join([(q[0] + '=' + q[1]) for q in query])
     parts[0] = parts[1] = ''
     parts[3] = query
@@ -678,12 +658,12 @@ def compute_signature(method, path, body, key):
     path = _SIGNATURE_REGEX.sub('-', path)
     key = _SIGNATURE_REGEX.sub('-', key)
 
-    if body and body.startswith('---'):
+    if body and body.startswith(b'---'):
         body = None  # file attachment
 
     body = body and _SIGNATURE_REGEX.sub('-', body.decode('utf8'))
 
-    return hashlib.sha1('%s:%s:%s:%s' % (method, path, body or '', key)).hexdigest().lower()
+    return hashlib.sha1(('%s:%s:%s:%s' % (method, path, body or '', key)).encode('utf-8')).hexdigest().lower()
 
 
 def parse_cookies(cookies_headers):
@@ -705,7 +685,8 @@ def parse_cookies(cookies_headers):
 
 
 def build_basic_header(username, password):
-    return 'Basic ' + base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
+    userAndPass = base64.b64encode(b"username:password").decode("ascii")
+    return 'Basic %s' %  userAndPass
 
 
 def parse_basic_header(header):
@@ -721,7 +702,7 @@ def parse_basic_header(header):
     try:
         decoded = base64.decodestring(encoded)
 
-    except:
+    except Exception:
         return None
 
     parts = decoded.split(':', 1)
@@ -838,19 +819,19 @@ def urlopen(*args, **kwargs):
 
         kwargs.setdefault('context', ctx)
 
-    return urllib2.urlopen(*args, **kwargs)
+    return urllib_urlopen(*args, **kwargs)
 
 
-def build_editable_mask_file(camera_id, mask_class, mask_lines, capture_width=None, capture_height=None):
+def build_editable_mask_file(camera_id, mask_lines, capture_width=None, capture_height=None):
     if not mask_lines:
         return ''
 
     width = mask_lines[0]
     height = mask_lines[1]
     mask_lines = mask_lines[2:]
-    
-    logging.debug('building editable %s mask for camera with id %s (%sx%s)' %
-                  (mask_class, camera_id, width, height))
+
+    logging.debug('building editable mask for camera with id %s (%sx%s)' %
+                  (camera_id, width, height))
 
     # horizontal rectangles
     nx = MASK_WIDTH  # number of rectangles
@@ -890,9 +871,9 @@ def build_editable_mask_file(camera_id, mask_class, mask_lines, capture_width=No
     im = Image.new('L', (width, height), 255)  # all white
     dr = ImageDraw.Draw(im)
 
-    for y in xrange(ny):
+    for y in range(int(ny)):
         line = mask_lines[line_index_func(y)]
-        for x in xrange(nx):
+        for x in range(nx):
             if line & (1 << (MASK_WIDTH - 1 - x)):
                 dr.rectangle((x * rw, y * rh, (x + 1) * rw - 1, (y + 1) * rh - 1), fill=0)
 
@@ -901,15 +882,15 @@ def build_editable_mask_file(camera_id, mask_class, mask_lines, capture_width=No
 
     if ry:
         line = mask_lines[line_index_func(ny)]
-        for x in xrange(nx):
+        for x in range(nx):
             if line & (1 << (MASK_WIDTH - 1 - x)):
                 dr.rectangle((x * rw, ny * rh, (x + 1) * rw - 1, ny * rh + ry - 1), fill=0)
 
         if rx and line & 1:
             dr.rectangle((nx * rw, ny * rh, nx * rw + rx - 1, ny * rh + ry - 1), fill=0)
 
-    file_name = build_mask_file_name(camera_id, mask_class)
-    
+    file_name = os.path.join(settings.CONF_PATH, 'mask_%s.pgm' % camera_id)
+
     # resize the image if necessary
     if capture_width and capture_height and im.size != (capture_width, capture_height):
         logging.debug('editable mask needs resizing from %sx%s to %sx%s' %
@@ -921,20 +902,15 @@ def build_editable_mask_file(camera_id, mask_class, mask_lines, capture_width=No
 
     return file_name
 
-def build_mask_file_name(camera_id, mask_class):
-    file_name = 'mask_%s.pgm' % (camera_id) if mask_class == 'motion' else 'mask_%s_%s.pgm' % (camera_id, mask_class)
-    full_path = os.path.join(settings.CONF_PATH, file_name)
 
-    return full_path
-
-def parse_editable_mask_file(camera_id, mask_class, capture_width=None, capture_height=None):
+def parse_editable_mask_file(camera_id, capture_width=None, capture_height=None):
     # capture_width and capture_height arguments represent the current size
     # of the camera image, as it might be different from that of the associated mask;
     # they can be null (e.g. netcams)
 
-    file_name = build_mask_file_name(camera_id, mask_class)
+    file_name = os.path.join(settings.CONF_PATH, 'mask_%s.pgm' % camera_id)
 
-    logging.debug('parsing editable mask %s for camera with id %s: %s' % (mask_class, camera_id, file_name))
+    logging.debug('parsing editable mask for camera with id %s: %s' % (camera_id, file_name))
 
     # read the image file
     try:
@@ -987,9 +963,9 @@ def parse_editable_mask_file(camera_id, mask_class, capture_width=None, capture_
 
     # parse the image contents and build the mask lines
     mask_lines = [width, height]
-    for y in xrange(ny):
+    for y in range(int(ny)):
         bits = []
-        for x in xrange(nx):
+        for x in range(nx):
             px = int((x + 0.5) * rw)
             py = int((y + 0.5) * rh)
             pixel = pixels[py * width + px]
@@ -1011,7 +987,7 @@ def parse_editable_mask_file(camera_id, mask_class, capture_width=None, capture_
 
     if ry:
         bits = []
-        for x in xrange(nx):
+        for x in range(nx):
             px = int((x + 0.5) * rw)
             py = int(ny * rh + ry / 2)
             pixel = pixels[py * width + px]
