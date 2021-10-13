@@ -6,14 +6,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>. 
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import re
@@ -27,7 +27,7 @@ import mimetypes
 from tornado.ioloop import IOLoop
 from motioneye import settings
 from motioneye import config
-#from motioneye import mediafiles
+from motioneye import mediafiles
 from motioneye import motionctl
 from motioneye import tzctl
 
@@ -37,20 +37,19 @@ messages = {
 
 user_agent = 'motionEye'
 
+
 def send_photo(api_key, chat_id, image_path, image_caption=""):
     data = {"chat_id": chat_id, "caption": image_caption}
     url = "https://api.telegram.org/bot%s/sendPhoto" % api_key
     with open(image_path, "rb") as image_file:
-        ret = requests.post(url, data=data, files={"photo": image_file})
-    #print(ret.json())
+        requests.post(url, data=data, files={"photo": image_file})
 
 
 def send_video(api_key, chat_id, video_path):
     data = {"chat_id": chat_id}
     url = "https://api.telegram.org/bot%s/sendVideo" % api_key
     with open(video_path, "rb") as video_file:
-        ret = requests.post(url, data=data, files={"video": video_file})
-    #print(ret.json())
+        requests.post(url, data=data, files={"video": video_file})
 
 
 def send_message(api_key, chat_id, message, file):
@@ -59,8 +58,8 @@ def send_message(api_key, chat_id, message, file):
         print('no file')
         logging.info('no file')
         telegram_url = 'https://api.telegram.org/bot%s/sendMessage' % api_key
-        url_req = telegram_url+ "?chat_id=" + chat_id + "&text=" + message
-        results = requests.get(url_req) 
+        url_req = telegram_url + "?chat_id=" + chat_id + "&text=" + message
+        requests.get(url_req)
     else:
         logging.info('file present')
         if 'video' in mimetypes.guess_type(file)[0]:
@@ -73,13 +72,12 @@ def send_message(api_key, chat_id, message, file):
 
 def make_message(message, camera_id, moment, timespan, callback):
     camera_config = config.get_camera(camera_id)
-    
+
     # we must start the IO loop for the media list subprocess polling
     io_loop = IOLoop.instance()
 
     def on_media_files(media_files):
         io_loop.stop()
-        photos = []
 
         timestamp = time.mktime(moment.timetuple())
         if media_files:
@@ -94,7 +92,7 @@ def make_message(message, camera_id, moment, timespan, callback):
             'hostname': socket.gethostname(),
             'moment': moment.strftime('%Y-%m-%d %H:%M:%S'),
         }
-        
+
         if settings.LOCAL_TIME_FILE:
             format_dict['timezone'] = tzctl.get_time_zone()
 
@@ -102,14 +100,14 @@ def make_message(message, camera_id, moment, timespan, callback):
             format_dict['timezone'] = 'local time'
 
         logging.debug('creating email message')
-    
+
         m = message % format_dict
 
         callback(m, media_files)
 
     if not timespan:
         return on_media_files([])
-    
+
     logging.debug('waiting for pictures to be taken')
     time.sleep(float(timespan))  # give motion some time to create motion pictures
 
@@ -125,7 +123,7 @@ def make_message(message, camera_id, moment, timespan, callback):
         logging.debug('narrowing down still images path lookup to %s' % prefix)
 
     mediafiles.list_media(camera_config, media_type='picture', prefix=prefix, callback=on_media_files)
-    
+
     io_loop.start()
 
 
@@ -137,11 +135,11 @@ def parse_options(parser, args):
     parser.add_argument('moment', help='the moment in ISO-8601 format')
     parser.add_argument('timespan', help='picture collection time span')
     return parser.parse_args(args)
-    
+
 
 def main(parser, args):
     import meyectl
-    
+
     # the motion daemon overrides SIGCHLD,
     # so we must restore it here,
     # or otherwise media listing won't work
@@ -151,7 +149,7 @@ def main(parser, args):
         # backwards compatibility with older configs lacking "from" field
         _from = 'motionEye on %s <%s>' % (socket.gethostname(), args[7].split(',')[0])
         args = args[:7] + [_from] + args[7:]
-    
+
     if not args[7]:
         args[7] = 'motionEye on %s <%s>' % (socket.gethostname(), args[8].split(',')[0])
 
@@ -165,11 +163,11 @@ def main(parser, args):
     # do not wait too long for media list,
     # telegram notifications are critical
     settings.LIST_MEDIA_TIMEOUT = settings.LIST_MEDIA_TIMEOUT_TELEGRAM
-    
+
     camera_id = motionctl.motion_camera_id_to_camera_id(options.motion_camera_id)
 
     logging.debug('timespan = %d' % int(options.timespan))
-    
+
     def on_message(message, files):
         try:
             print(message)
@@ -181,5 +179,5 @@ def main(parser, args):
             logging.error('failed to send telegram: %s' % e, exc_info=True)
 
         logging.debug('bye!')
-    
+
     make_message(message, camera_id, options.moment, options.timespan, on_message)

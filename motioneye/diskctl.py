@@ -164,11 +164,12 @@ def _list_disks_fdisk():
 
     def add_disk(d):
         logging.debug('found disk at "%s" on bus "%s": "%s %s"' %
-                (d['target'], d['bus'], d['vendor'], d['model']))
+                      (d['target'], d['bus'], d['vendor'], d['model']))
 
         for part in d['partitions']:
             logging.debug('found partition "%s" at "%s" on bus "%s": "%s %s"' %
-                    (part['part_no'], part['target'], part['bus'], part['vendor'], part['model']))
+                          (part['part_no'], part['target'],
+                           part['bus'], part['vendor'], part['model']))
 
         disks.append(d)
 

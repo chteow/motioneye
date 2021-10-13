@@ -837,7 +837,6 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
 
     data['threshold'] = threshold
 
-
     if (ui['storage_device'] == 'network-share') and settings.SMB_SHARES:
         mount_point = smbctl.make_mount_point(ui['network_server'], ui['network_share_name'], ui['network_username'])
         if ui['root_directory'].startswith('/'):
@@ -1414,7 +1413,7 @@ def motion_camera_dict_to_ui(data):
     command_notifications = []
     for e in on_event_start:
         if e.count(' sendmail '):
-            e = shlex.split(utils.make_str(e)) # poor shlex can't deal with unicode properly
+            e = shlex.split(utils.make_str(e))  # poor shlex can't deal with unicode properly
 
             if len(e) < 10:
                 continue
@@ -1438,7 +1437,7 @@ def motion_camera_dict_to_ui(data):
                 ui['email_notifications_picture_time_span'] = 0
 
         elif e.count(' webhook '):
-            e = shlex.split(utils.make_str(e)) # poor shlex can't deal with unicode properly
+            e = shlex.split(utils.make_str(e))  # poor shlex can't deal with unicode properly
 
             if len(e) < 3:
                 continue
@@ -1482,7 +1481,7 @@ def motion_camera_dict_to_ui(data):
     command_storage = []
     for e in on_movie_end:
         if e.count(' webhook '):
-            e = shlex.split(utils.make_str(e)) # poor shlex can't deal with unicode properly
+            e = shlex.split(utils.make_str(e))  # poor shlex can't deal with unicode properly
 
             if len(e) < 3:
                 continue
@@ -1522,8 +1521,6 @@ def motion_camera_dict_to_ui(data):
     # action commands
     action_commands = get_action_commands(data)
     ui['actions'] = list(action_commands.keys())
-
-    #print(ui)
 
     return ui
 

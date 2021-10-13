@@ -482,7 +482,7 @@ class GoogleDrive(UploadService, GoogleBase):
         folder_id = self._get_folder_id_by_name('root', cloud_dir, False)
         children = self._get_children(folder_id)
         self.info('found %s/%s folder(s) in local/cloud' % \
-            (len(local_folders), len(children)))
+                  (len(local_folders), len(children)))
         self.debug('local %s' % local_folders)
         for child in children:
             id = child['id']
@@ -1180,6 +1180,7 @@ def _save(services):
     finally:
         f.close()
 
+
 def clean_cloud(local_dir, data, info):
     camera_id = info['camera_id']
     service_name = info['service_name']
@@ -1194,6 +1195,7 @@ def clean_cloud(local_dir, data, info):
         service.load(data)
         service.clean_cloud(cloud_dir, local_folders)
 
+
 def exist_in_local(folder, local_folders):
     if not local_folders:
         local_folders = []
@@ -1202,6 +1204,7 @@ def exist_in_local(folder, local_folders):
         return False
 
     return folder in local_folders
+
 
 def get_local_folders(dir):
     folders = next(os.walk(dir))[1]

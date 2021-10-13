@@ -137,12 +137,12 @@ class BaseHandler(RequestHandler):
             up = utils.parse_basic_header(self.request.headers['Authorization'])
             if up:
                 if (up['username'] == admin_username and
-                    admin_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
+                   admin_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
 
                     return 'admin'
 
                 if (up['username'] == normal_username and
-                    normal_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
+                   normal_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
 
                     return 'normal'
 
@@ -182,7 +182,7 @@ class BaseHandler(RequestHandler):
                 logging.error(str(exception))
                 self.set_status(exception.status_code)
                 self.finish_json({'error': exception.log_message or
-                                           getattr(exception, 'reason', None) or str(exception)})
+                                 getattr(exception, 'reason', None) or str(exception)})
 
             else:
                 logging.error(str(exception), exc_info=True)
@@ -801,7 +801,7 @@ class ConfigHandler(BaseHandler):
                 ConfigHandler._upload_service_test_info = (self, service_name)
 
                 tasks.add(0, uploadservices.test_access, tag='uploadservices.test(%s)' % service_name,
-                        camera_id=camera_id, service_name=service_name, data=data, callback=self._on_test_result)
+                          camera_id=camera_id, service_name=service_name, data=data, callback=self._on_test_result)
 
             elif what == 'email':
                 from motioneye import sendmail
@@ -1036,7 +1036,7 @@ class PictureHandler(BaseHandler):
                 })
 
             mediafiles.list_media(camera_config, media_type='picture',
-                    callback=on_media_list, prefix=self.get_argument('prefix', None))
+                                  callback=on_media_list, prefix=self.get_argument('prefix', None))
 
         elif utils.is_remote_camera(camera_config):
             def on_response(remote_list=None, error=None):
@@ -1056,8 +1056,8 @@ class PictureHandler(BaseHandler):
         camera_config = config.get_camera(camera_id)
 
         if (utils.is_local_motion_camera(camera_config) or
-            utils.is_simple_mjpeg_camera(camera_config) or
-            self.get_argument('title', None) is not None):
+           utils.is_simple_mjpeg_camera(camera_config) or
+           self.get_argument('title', None) is not None):
 
             self.render('main.html',
                         frame=True,
@@ -1129,8 +1129,8 @@ class PictureHandler(BaseHandler):
         camera_config = config.get_camera(camera_id)
         if utils.is_local_motion_camera(camera_config):
             content = mediafiles.get_media_preview(camera_config, filename, 'picture',
-                    width=self.get_argument('width', None),
-                    height=self.get_argument('height', None))
+                                                   width=self.get_argument('width', None),
+                                                   height=self.get_argument('height', None))
 
             if content:
                 self.set_header('Content-Type', 'image/jpeg')
@@ -1148,14 +1148,15 @@ class PictureHandler(BaseHandler):
 
                 else:
                     self.set_header('Content-Type', 'image/svg+xml')
-                    content = open(os.path.join(settings.STATIC_PATH, 'img', 'no-preview.svg')).read()
+                    content = open(os.path.join(settings.STATIC_PATH, 'img',
+                                                'no-preview.svg')).read()
 
                 self.finish(content)
 
             remote.get_media_preview(camera_config, filename=filename, media_type='picture',
-                    width=self.get_argument('width', None),
-                    height=self.get_argument('height', None),
-                    callback=on_response)
+                                     width=self.get_argument('width', None),
+                                     height=self.get_argument('height', None),
+                                     callback=on_response)
 
         else:  # assuming simple mjpeg camera
             raise HTTPError(400, 'unknown operation')
@@ -1458,7 +1459,8 @@ class MovieHandler(BaseHandler):
                 })
 
             mediafiles.list_media(camera_config, media_type='movie',
-                    callback=on_media_list, prefix=self.get_argument('prefix', None))
+                                  callback=on_media_list,
+                                  prefix=self.get_argument('prefix', None))
 
         elif utils.is_remote_camera(camera_config):
             def on_response(remote_list=None, error=None):
@@ -1482,8 +1484,8 @@ class MovieHandler(BaseHandler):
         camera_config = config.get_camera(camera_id)
         if utils.is_local_motion_camera(camera_config):
             content = mediafiles.get_media_preview(camera_config, filename, 'movie',
-                    width=self.get_argument('width', None),
-                    height=self.get_argument('height', None))
+                                                   width=self.get_argument('width', None),
+                                                   height=self.get_argument('height', None))
 
             if content:
                 self.set_header('Content-Type', 'image/jpeg')
@@ -1506,9 +1508,9 @@ class MovieHandler(BaseHandler):
                 self.finish(content)
 
             remote.get_media_preview(camera_config, filename=filename, media_type='movie',
-                    width=self.get_argument('width', None),
-                    height=self.get_argument('height', None),
-                    callback=on_response)
+                                     width=self.get_argument('width', None),
+                                     height=self.get_argument('height', None),
+                                     callback=on_response)
 
         else:  # assuming simple mjpeg camera
             raise HTTPError(400, 'unknown operation')
@@ -1649,8 +1651,9 @@ class MoviePlaybackHandler(StaticFileHandler, BaseHandler):
 class MovieDownloadHandler(MoviePlaybackHandler):
     def set_extra_headers(self, filename):
         if (self.get_status() in (200, 304)):
-            self.set_header('Content-Disposition','attachment; filename=' + self.pretty_filename + ';')
-            self.set_header('Expires','0')
+            self.set_header('Content-Disposition',
+                            'attachment; filename=' + self.pretty_filename + ';')
+            self.set_header('Expires', '0')
 
 
 class ActionHandler(BaseHandler):
@@ -1752,8 +1755,10 @@ class PrefsHandler(BaseHandler):
 
 class RelayEventHandler(BaseHandler):
     start_time = time.time()
+
     @BaseHandler.auth(admin=True)
     def post(self):
+
         event = self.get_argument('event')
         motion_camera_id = int(self.get_argument('motion_camera_id'))
 
@@ -1786,14 +1791,13 @@ class RelayEventHandler(BaseHandler):
 
             # generate preview (thumbnail)
             tasks.add(5, mediafiles.make_movie_preview, tag='make_movie_preview(%s)' % filename,
-                    camera_config=camera_config, full_path=filename)
+                      camera_config=camera_config, full_path=filename)
 
             # upload to external service
             if camera_config['@upload_enabled'] and camera_config['@upload_movie']:
                 self.upload_media_file(filename, camera_id, camera_config)
 
-            print('telegram {}'.format(camera_config['@telegram_notifications_enabled']))
-            '''    
+            '''
             if camera_config['@telegram_notifications_enabled'] and\
                camera_config['@telegram_send_movie']:
                 message = 'Motion detect @ {} - {}'.format(camera_id,
@@ -1805,7 +1809,7 @@ class RelayEventHandler(BaseHandler):
 
         elif event == 'picture_save':
             filename = self.get_argument('filename')
-            # telegram 
+            # telegram
             if time.time() - self.start_time > float(camera_config['@telegram_notifications_picture_time_span']):
                 if camera_config['@object_detection']:
                     from motioneye import darknet
@@ -1814,22 +1818,22 @@ class RelayEventHandler(BaseHandler):
                         for object in camera_config['@object_detection'].split(','):
                             if result == object:
                                 sendtelegram.send_message(camera_config['@telegram_notifications_api_token'],
-                                                          camera_config['@telegram_notifications_chatid'],    
+                                                          camera_config['@telegram_notifications_chatid'],
                                                           "", filename)
                     except Exception as e:
                         logging.debug('return none from darknet')
 
-                    start_time = time.time()
+                    self.start_time = time.time()
                 else:
                     if camera_config['@telegram_notifications_enabled'] and\
-                        camera_config['@telegram_send_picture']:
+                       camera_config['@telegram_send_picture']:
                         message = 'Motion detect @ {} - {}'.format(camera_id,
                                                                    datetime.datetime.now())
                         sendtelegram.send_message(camera_config['@telegram_notifications_api_token'],
                                                   camera_config['@telegram_notifications_chatid'],
                                                   message, filename)
-                        start_time = time.time()
-  
+                        self.start_time = time.time()
+
             # upload to external service
             if camera_config['@upload_enabled'] and camera_config['@upload_picture']:
                 self.upload_media_file(filename, camera_id, camera_config)
@@ -1843,10 +1847,12 @@ class RelayEventHandler(BaseHandler):
         service_name = camera_config['@upload_service']
 
         tasks.add(5, uploadservices.upload_media_file, tag='upload_media_file(%s)' % filename,
-                camera_id=camera_id, service_name=service_name,
-                camera_name=camera_config['camera_name'],
-                target_dir=camera_config['@upload_subfolders'] and camera_config['target_dir'],
-                filename=filename)
+                  camera_id=camera_id,
+                  service_name=service_name,
+                  camera_name=camera_config['camera_name'],
+                  target_dir=camera_config['@upload_subfolders'] and
+                  camera_config['target_dir'],
+                  filename=filename)
 
 
 class LogHandler(BaseHandler):
