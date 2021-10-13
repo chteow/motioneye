@@ -21,29 +21,32 @@ import json
 import logging
 import os
 import re
+import time
+import smtplib
 import socket
 import subprocess
 
 from tornado.ioloop import IOLoop
 from tornado.web import RequestHandler, StaticFileHandler, HTTPError, asynchronous
 
-import config
-import mediafiles
-import mjpgclient
-import mmalctl
-import monitor
-import motionctl
-import powerctl
-import prefs
-import remote
-import settings
-import smbctl
-import tasks
-import template
-import update
-import uploadservices
-import utils
-import v4l2ctl
+from motioneye import config
+from motioneye import mediafiles
+from motioneye import mjpgclient
+from motioneye import mmalctl
+from motioneye import monitor
+from motioneye import motionctl
+from motioneye import powerctl
+from motioneye import prefs
+from motioneye import remote
+from motioneye import settings
+from motioneye import smbctl
+from motioneye import tasks
+from motioneye import template
+from motioneye import update
+from motioneye import uploadservices
+from motioneye import sendtelegram
+from motioneye import utils
+from motioneye import v4l2ctl
 
 
 class BaseHandler(RequestHandler):
@@ -127,19 +130,19 @@ class BaseHandler(RequestHandler):
         admin_password = main_config.get('@admin_password')
         normal_password = main_config.get('@normal_password')
 
-        admin_hash = hashlib.sha1(main_config['@admin_password']).hexdigest()
-        normal_hash = hashlib.sha1(main_config['@normal_password']).hexdigest()
+        admin_hash = hashlib.sha1(main_config['@admin_password'].encode('utf-8')).hexdigest()
+        normal_hash = hashlib.sha1(main_config['@normal_password'].encode('utf-8')).hexdigest()
 
         if settings.HTTP_BASIC_AUTH and 'Authorization' in self.request.headers:
             up = utils.parse_basic_header(self.request.headers['Authorization'])
             if up:
                 if (up['username'] == admin_username and
-                    admin_password in (up['password'], hashlib.sha1(up['password']).hexdigest())):
+                    admin_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
 
                     return 'admin'
 
                 if (up['username'] == normal_username and
-                    normal_password in (up['password'], hashlib.sha1(up['password']).hexdigest())):
+                    normal_password in (up['password'], hashlib.sha1(up['password'].encode('utf-8')).hexdigest())):
 
                     return 'normal'
 
@@ -248,12 +251,6 @@ class MainHandler(BaseHandler):
                     admin_username=config.get_main().get('@admin_username'),
                     has_h264_omx_support=motionctl.has_h264_omx_support(),
                     has_h264_v4l2m2m_support=motionctl.has_h264_v4l2m2m_support(),
-                    has_h264_nvenc_support=motionctl.has_h264_nvenc_support(),
-                    has_h264_nvmpi_support=motionctl.has_h264_nvmpi_support(),
-                    has_hevc_nvenc_support=motionctl.has_hevc_nvenc_support(),
-                    has_hevc_nvmpi_support=motionctl.has_hevc_nvmpi_support(),
-                    has_h264_qsv_support=motionctl.has_h264_qsv_support(),
-                    has_hevc_qsv_support=motionctl.has_hevc_qsv_support(),
                     has_motion=bool(motionctl.find_motion()[0]),
                     mask_width=utils.MASK_WIDTH)
 
@@ -359,7 +356,7 @@ class ConfigHandler(BaseHandler):
             ui_config = json.loads(self.request.body)
 
         except Exception as e:
-            logging.error('could not decode json: %(msg)s' % {'msg': unicode(e)})
+            logging.error('could not decode json: %(msg)s' % {'msg': utils.make_str(e)})
 
             raise
 
@@ -515,7 +512,7 @@ class ConfigHandler(BaseHandler):
 
                 # make sure main config is handled first
                 items = ui_config.items()
-                items.sort(key=lambda (key, cfg): key != 'main')
+                items = sorted(items, key=lambda key_cfg: key_cfg[0] != 'main')
 
                 for key, cfg in items:
                     if key == 'main':
@@ -694,7 +691,7 @@ class ConfigHandler(BaseHandler):
             device_details = json.loads(self.request.body)
 
         except Exception as e:
-            logging.error('could not decode json: %(msg)s' % {'msg': unicode(e)})
+            logging.error('could not decode json: %(msg)s' % {'msg': utils.make_str(e)})
 
             raise
 
@@ -807,9 +804,8 @@ class ConfigHandler(BaseHandler):
                         camera_id=camera_id, service_name=service_name, data=data, callback=self._on_test_result)
 
             elif what == 'email':
-                import sendmail
-                import tzctl
-                import smtplib
+                from motioneye import sendmail
+                from motioneye import tzctl
 
                 logging.debug('testing notification email')
 
@@ -866,24 +862,16 @@ class ConfigHandler(BaseHandler):
                     self.finish_json({'error': str(msg)})
 
             elif what == 'telegram':
-                import sendtelegram
-
-                logging.debug('testing telegram notification')
-
+                from motioneye import sendtelegram
                 try:
-                    message = 'This is a test of motionEye\'s telegram messaging'
-                    sendtelegram.send_message(data['api'], int(data['chatid']), message=message, files=[])
-
+                    sendtelegram.send_message(data['telegram_notifications_api_token'],
+                                              data['telegram_notifications_chatid'],
+                                              'This is testing telegram notifications access',
+                                              None)
                     self.finish_json()
-
-                    logging.debug('telegram notification test succeeded')
-
                 except Exception as e:
-                    msg = str(e)
-
-                    msg_lower = msg.lower()
-                    logging.error('telegram notification test failed: %s' % msg, exc_info=True)
-                    self.finish_json({'error': str(msg)})
+                    logging.error('access to telegram failed!!')
+                    self.finish_json({'error': str(e)})
 
             elif what == 'network_share':
                 logging.debug('testing access to network share //%s/%s' % (data['server'], data['share']))
@@ -1184,7 +1172,7 @@ class PictureHandler(BaseHandler):
                 self.finish_json()
 
             except Exception as e:
-                self.finish_json({'error': unicode(e)})
+                self.finish_json({'error': utils.make_str(e)})
 
         elif utils.is_remote_camera(camera_config):
             def on_response(response=None, error=None):
@@ -1395,7 +1383,7 @@ class PictureHandler(BaseHandler):
                 self.finish_json()
 
             except Exception as e:
-                self.finish_json({'error': unicode(e)})
+                self.finish_json({'error': utils.make_str(e)})
 
         elif utils.is_remote_camera(camera_config):
             def on_response(response=None, error=None):
@@ -1415,7 +1403,7 @@ class PictureHandler(BaseHandler):
             self.finish(content)
 
         except IOError as e:
-            logging.warning('could not write response: %(msg)s' % {'msg': unicode(e)})
+            logging.warning('could not write response: %(msg)s' % {'msg': utils.make_str(e)})
 
 
 class MovieHandler(BaseHandler):
@@ -1537,7 +1525,7 @@ class MovieHandler(BaseHandler):
                 self.finish_json()
 
             except Exception as e:
-                self.finish_json({'error': unicode(e)})
+                self.finish_json({'error': utils.make_str(e)})
 
         elif utils.is_remote_camera(camera_config):
             def on_response(response=None, error=None):
@@ -1564,7 +1552,7 @@ class MovieHandler(BaseHandler):
                 self.finish_json()
 
             except Exception as e:
-                self.finish_json({'error': unicode(e)})
+                self.finish_json({'error': utils.make_str(e)})
 
         elif utils.is_remote_camera(camera_config):
             def on_response(response=None, error=None):
@@ -1646,7 +1634,8 @@ class MoviePlaybackHandler(StaticFileHandler, BaseHandler):
                 f = os.path.join(self.tmpdir, f)
                 if os.path.isfile(f) and os.stat(f).st_atime <= stale_time:
                     os.remove(f)
-        except:
+
+        except OSError:
             logging.error('could not delete temp file', exc_info=True)
             pass
 
@@ -1762,6 +1751,7 @@ class PrefsHandler(BaseHandler):
 
 
 class RelayEventHandler(BaseHandler):
+    start_time = time.time()
     @BaseHandler.auth(admin=True)
     def post(self):
         event = self.get_argument('event')
@@ -1802,9 +1792,44 @@ class RelayEventHandler(BaseHandler):
             if camera_config['@upload_enabled'] and camera_config['@upload_movie']:
                 self.upload_media_file(filename, camera_id, camera_config)
 
+            print('telegram {}'.format(camera_config['@telegram_notifications_enabled']))
+            '''    
+            if camera_config['@telegram_notifications_enabled'] and\
+               camera_config['@telegram_send_movie']:
+                message = 'Motion detect @ {} - {}'.format(camera_id,
+                                                           datetime.datetime.now())
+                sendtelegram.send_message(camera_config['@telegram_notifications_api_token'],
+                                          camera_config['@telegram_notifications_chatid'],
+                                          message, filename)
+            '''
+
         elif event == 'picture_save':
             filename = self.get_argument('filename')
+            # telegram 
+            if time.time() - self.start_time > float(camera_config['@telegram_notifications_picture_time_span']):
+                if camera_config['@object_detection']:
+                    from motioneye import darknet
+                    result = darknet.main(filename)
+                    try:
+                        for object in camera_config['@object_detection'].split(','):
+                            if result == object:
+                                sendtelegram.send_message(camera_config['@telegram_notifications_api_token'],
+                                                          camera_config['@telegram_notifications_chatid'],    
+                                                          "", filename)
+                    except Exception as e:
+                        logging.debug('return none from darknet')
 
+                    start_time = time.time()
+                else:
+                    if camera_config['@telegram_notifications_enabled'] and\
+                        camera_config['@telegram_send_picture']:
+                        message = 'Motion detect @ {} - {}'.format(camera_id,
+                                                                   datetime.datetime.now())
+                        sendtelegram.send_message(camera_config['@telegram_notifications_api_token'],
+                                                  camera_config['@telegram_notifications_chatid'],
+                                                  message, filename)
+                        start_time = time.time()
+  
             # upload to external service
             if camera_config['@upload_enabled'] and camera_config['@upload_picture']:
                 self.upload_media_file(filename, camera_id, camera_config)

@@ -40,8 +40,8 @@ class MjpgClient(IOStream):
     def __init__(self, camera_id, port, username, password, auth_mode):
         self._camera_id = camera_id
         self._port = port
-        self._username = (username or '')
-        self._password = (password or '')
+        self._username = (username or '').encode('utf8')
+        self._password = (password or '').encode('utf8')
         self._auth_mode = auth_mode
         self._auth_digest_state = {}
 
@@ -139,8 +139,7 @@ class MjpgClient(IOStream):
             logging.debug('mjpg client using basic authentication')
 
             auth_header = utils.build_basic_header(self._username, self._password)
-            _header = bytes('GET / HTTP/1.1\r\nAuthorization: %s\r\nConnection: close\r\n\r\n' % auth_header, encoding='utf8')
-            self.write(_header)
+            self.write(b'GET / HTTP/1.1\r\nAuthorization: %s\r\nConnection: close\r\n\r\n' % auth_header)
 
         elif self._auth_mode == 'digest':  # in digest auth mode, the header is built upon receiving 401
             self.write(b'GET / HTTP/1.1\r\n\r\n')
@@ -186,8 +185,7 @@ class MjpgClient(IOStream):
             logging.debug('mjpg client using basic authentication')
 
             auth_header = utils.build_basic_header(self._username, self._password)
-            _header = bytes('GET / HTTP/1.1\r\nAuthorization: %s\r\nConnection: close\r\n\r\n' % auth_header, encoding='utf8')
-            self.write(_header)
+            self.write(b'GET / HTTP/1.1\r\nAuthorization: %s\r\nConnection: close\r\n\r\n' % auth_header)
             self._seek_http()
 
             return

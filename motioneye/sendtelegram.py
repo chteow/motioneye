@@ -15,33 +15,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>. 
 
+import os
+import re
 import datetime
 import logging
-import io
-import os
-import sys
-import re
 import signal
 import socket
 import time
-import urllib
-import urllib2
-import pycurl
-import random
-import codecs
-import uuid
-import binascii
-import datetime
-import json
-
+import requests
+import mimetypes
 from tornado.ioloop import IOLoop
-
-import settings
-
-import config
-import mediafiles
-import motionctl
-import tzctl
+from motioneye import settings
+from motioneye import config
+#from motioneye import mediafiles
+from motioneye import motionctl
+from motioneye import tzctl
 
 messages = {
     'motion_start': 'Motion has been detected by camera "%(camera)s/%(hostname)s" at %(moment)s (%(timezone)s).'
@@ -49,25 +37,39 @@ messages = {
 
 user_agent = 'motionEye'
 
+def send_photo(api_key, chat_id, image_path, image_caption=""):
+    data = {"chat_id": chat_id, "caption": image_caption}
+    url = "https://api.telegram.org/bot%s/sendPhoto" % api_key
+    with open(image_path, "rb") as image_file:
+        ret = requests.post(url, data=data, files={"photo": image_file})
+    #print(ret.json())
 
-def send_message(api_key, chat_id, message, files):
-    telegram_message_url = 'https://api.telegram.org/bot%s/sendMessage' % api_key
-    telegram_photo_url = 'https://api.telegram.org/bot%s/sendPhoto' % api_key
-    c = pycurl.Curl()
-    c.setopt(c.POST, 1)
-    c.setopt(c.URL, telegram_message_url)
-    if not files:
-        logging.info('no files')
-        c.setopt(c.POSTFIELDS, "chat_id=%s&text=%s" % (chat_id, message))
-        c.perform()
+
+def send_video(api_key, chat_id, video_path):
+    data = {"chat_id": chat_id}
+    url = "https://api.telegram.org/bot%s/sendVideo" % api_key
+    with open(video_path, "rb") as video_file:
+        ret = requests.post(url, data=data, files={"video": video_file})
+    #print(ret.json())
+
+
+def send_message(api_key, chat_id, message, file):
+    print(file)
+    if not file:
+        print('no file')
+        logging.info('no file')
+        telegram_url = 'https://api.telegram.org/bot%s/sendMessage' % api_key
+        url_req = telegram_url+ "?chat_id=" + chat_id + "&text=" + message
+        results = requests.get(url_req) 
     else:
-        logging.info('files present')
-        for f in files:
-            c.setopt(c.URL, telegram_photo_url)
-            c.setopt(c.HTTPPOST, [("chat_id", chat_id), ("caption", message), ("photo", (c.FORM_FILE, f))]) # Send photos
-            c.perform()
-    c.close()
+        logging.info('file present')
+        if 'video' in mimetypes.guess_type(file)[0]:
+            send_video(api_key, chat_id, file)
+        elif 'image' in mimetypes.guess_type(file)[0]:
+            send_photo(api_key, chat_id, file)
+
     logging.debug('sending email message')
+
 
 def make_message(message, camera_id, moment, timespan, callback):
     camera_config = config.get_camera(camera_id)
@@ -154,7 +156,7 @@ def main(parser, args):
         args[7] = 'motionEye on %s <%s>' % (socket.gethostname(), args[8].split(',')[0])
 
     options = parse_options(parser, args)
-    print options 
+    print(options)
     meyectl.configure_logging('telegram', options.log_to_file)
 
     logging.debug('hello!')
@@ -170,7 +172,7 @@ def main(parser, args):
     
     def on_message(message, files):
         try:
-            print message
+            print(message)
             logging.info('sending telegram')
             send_message(options.api, options.chatid, message, files or [])
             logging.info('telegram sent')

@@ -481,7 +481,6 @@ def test_rtsp_url(data, callback):
         ]
 
         if username and send_auth[0]:
-            print('im here username [{}]'.format(username))
             auth_header = 'Authorization: ' + build_basic_header(username, password)
             lines.append(auth_header)
 
@@ -685,8 +684,7 @@ def parse_cookies(cookies_headers):
 
 
 def build_basic_header(username, password):
-    userAndPass = base64.b64encode(b"username:password").decode("ascii")
-    return 'Basic %s' %  userAndPass
+    return 'Basic ' + base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
 
 
 def parse_basic_header(header):

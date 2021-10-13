@@ -906,7 +906,6 @@ function makeModalDialogButtons(buttonsInfo) {
      * * caption: String
      * * isDefault: Boolean
      * * click: Function
-     * * className: String
      */
     
     var buttonsContainer = $('<table class="modal-buttons-container"><tr></tr></table>');
@@ -937,11 +936,7 @@ function makeModalDialogButtons(buttonsInfo) {
         else {
             info.click = hideModalDialog; /* every button closes the dialog */
         }
-
-        if (info.className) {
-            buttonDiv.addClass(info.className);
-        }
-
+        
         buttonDiv.click(info.click);
 
         var td = $('<td></td>');

@@ -27,18 +27,18 @@ import pipes
 import re
 import signal
 import stat
-import StringIO
 import subprocess
 import time
 import zipfile
 
 from PIL import Image
+from six.moves import StringIO
 from tornado.ioloop import IOLoop
 
-import config
-import settings
-import utils
-import uploadservices
+from motioneye import config
+from motioneye import settings
+from motioneye import utils
+from motioneye import uploadservices
 
 
 _PICTURE_EXTS = ['.jpg']
@@ -129,7 +129,7 @@ def _list_media_files(directory, exts, prefix=None):
                 st = os.stat(full_path)
 
             except Exception as e:
-                logging.error('stat failed: ' + unicode(e))
+                logging.error('stat failed: ' + utils.make_str(e))
                 continue
 
             if not stat.S_ISREG(st.st_mode):  # not a regular file
@@ -183,7 +183,7 @@ def _remove_older_files(directory, moment, clean_cloud_info, exts):
                     try:
                         os.remove(os.path.join(dir_path, p))
 
-                    except:
+                    except Exception as e:
                         logging.error('failed to remove %s: %s' % (p, e))
 
             if not listing or len(listing) == len(thumbs):
@@ -194,7 +194,7 @@ def _remove_older_files(directory, moment, clean_cloud_info, exts):
                     os.removedirs(dir_path)
                     removed_folder_count += 1
 
-                except:
+                except Exception as e:
                     logging.error('failed to remove %s: %s' % (dir_path, e))
 
     if clean_cloud_info and removed_folder_count > 0:
@@ -209,6 +209,7 @@ def find_ffmpeg():
     # binary
     try:
         binary = subprocess.check_output(['which', 'ffmpeg'], stderr=utils.DEV_NULL).strip()
+        binary = binary.decode()
 
     except subprocess.CalledProcessError:  # not found
         return None, None, None
@@ -216,6 +217,7 @@ def find_ffmpeg():
     # version
     try:
         output = subprocess.check_output(binary + ' -version', shell=True)
+        output = output.decode()
 
     except subprocess.CalledProcessError as e:
         logging.error('ffmpeg: could find version: %s' % e)
@@ -227,6 +229,7 @@ def find_ffmpeg():
     # codecs
     try:
         output = subprocess.check_output(binary + ' -codecs -hide_banner', shell=True)
+        output = output.decode()
 
     except subprocess.CalledProcessError as e:
         logging.error('ffmpeg: could not list supported codecs: %s' % e)
@@ -330,7 +333,7 @@ def make_movie_preview(camera_config, full_path):
 
     except subprocess.CalledProcessError as e:
         logging.error('failed to create movie preview for %(path)s: %(msg)s' % {
-                'path': full_path, 'msg': unicode(e)})
+                'path': full_path, 'msg': utils.make_str(e)})
 
         return None
 
@@ -354,7 +357,7 @@ def make_movie_preview(camera_config, full_path):
 
         except subprocess.CalledProcessError as e:
             logging.error('failed to create movie preview for %(path)s: %(msg)s' % {
-                    'path': full_path, 'msg': unicode(e)})
+                    'path': full_path, 'msg': utils.make_str(e)})
 
             return None
 
@@ -371,7 +374,7 @@ def make_movie_preview(camera_config, full_path):
         try:
             os.remove(thumb_path)
 
-        except:
+        except OSError:
             pass
 
         return None
@@ -446,7 +449,7 @@ def list_media(camera_config, media_type, callback, prefix=None):
                 try:
                     os.kill(process.pid, signal.SIGTERM)
 
-                except:
+                except OSError:
                     pass  # nevermind
 
                 callback(None)
@@ -474,12 +477,12 @@ def get_media_content(camera_config, path, media_type):
     full_path = os.path.join(target_dir, path)
 
     try:
-        with open(full_path) as f:
+        with open(full_path, "rb") as f:
             return f.read()
 
     except Exception as e:
         logging.error('failed to read file %(path)s: %(msg)s' % {
-                'path': full_path, 'msg': unicode(e)})
+                'path': full_path, 'msg': utils.make_str(e)})
 
         return None
 
@@ -528,7 +531,7 @@ def get_zipped_content(camera_config, media_type, group, callback):
         logging.debug('reading zip file "%s" into memory' % zip_filename)
 
         try:
-            with open(zip_filename, mode='r') as f:
+            with open(zip_filename, mode='rb') as f:
                 data = f.read()
 
             working.value = False
@@ -566,7 +569,7 @@ def get_zipped_content(camera_config, media_type, group, callback):
                 try:
                     os.kill(process.pid, signal.SIGTERM)
 
-                except:
+                except OSError:
                     pass  # nevermind
 
                 callback(None)
@@ -576,7 +579,7 @@ def get_zipped_content(camera_config, media_type, group, callback):
                 data = parent_pipe.recv()
                 logging.debug('zip process has returned %d bytes' % len(data))
 
-            except:
+            except OSError:
                 data = None
 
             callback(data)
@@ -646,7 +649,7 @@ def make_timelapse_movie(camera_config, framerate, interval, group):
                 try:
                     os.kill(_timelapse_process.pid, signal.SIGTERM)
 
-                except:
+                except OSError:
                     pass  # nevermind
 
                 _timelapse_process.progress = -1
@@ -677,7 +680,7 @@ def make_timelapse_movie(camera_config, framerate, interval, group):
             slices.setdefault(idx, []).append(m)
 
         selected = []
-        for i in xrange(max_idx + 1):
+        for i in range(max_idx + 1):
             s = slices.get(i)
             if not s:
                 continue
@@ -758,14 +761,14 @@ def make_timelapse_movie(camera_config, framerate, interval, group):
                 try:
                     os.remove(tmp_filename)
 
-                except:
+                except OSError:
                     pass
 
             else:
                 logging.debug('reading timelapse movie file "%s" into memory' % tmp_filename)
 
                 try:
-                    with open(tmp_filename, mode='r') as f:
+                    with open(tmp_filename, mode='rb') as f:
                         _timelapse_data = f.read()
 
                     logging.debug('timelapse movie process has returned %d bytes' % len(_timelapse_data))
@@ -777,7 +780,7 @@ def make_timelapse_movie(camera_config, framerate, interval, group):
                     try:
                         os.remove(tmp_filename)
 
-                    except:
+                    except OSError:
                         pass
 
     poll_media_list_process()
@@ -813,32 +816,31 @@ def get_media_preview(camera_config, path, media_type, width, height):
         full_path += '.thumb'
 
     try:
-        with open(full_path) as f:
+        with open(full_path, "rb") as f:
             content = f.read()
 
     except Exception as e:
         logging.error('failed to read file %(path)s: %(msg)s' % {
-                'path': full_path, 'msg': unicode(e)})
+                'path': full_path, 'msg': utils.make_str(e)})
 
         return None
 
     if width is height is None:
         return content
 
-    sio = StringIO.StringIO(content)
     try:
-        image = Image.open(sio)
+        image = Image.open(content)
 
     except Exception as e:
         logging.error('failed to open media preview image file: %s' % e)
         return None
 
-    width = width and int(float(width)) or image.size[0]
-    height = height and int(float(height)) or image.size[1]
+    width = width and int(width) or image.size[0]
+    height = height and int(height) or image.size[1]
 
     image.thumbnail((width, height), Image.LINEAR)
 
-    sio = StringIO.StringIO()
+    sio = StringIO()
     image.save(sio, format='JPEG')
 
     return sio.getvalue()
@@ -860,7 +862,7 @@ def del_media_content(camera_config, path, media_type):
         try:
             os.remove(full_path + '.thumb')
 
-        except:
+        except OSError:
             pass
 
         # remove the parent directories if empty or contains only thumb files
@@ -878,7 +880,7 @@ def del_media_content(camera_config, path, media_type):
 
     except Exception as e:
         logging.error('failed to remove file %(path)s: %(msg)s' % {
-                'path': full_path, 'msg': unicode(e)})
+                'path': full_path, 'msg': utils.make_str(e)})
 
         raise
 
@@ -888,7 +890,7 @@ def del_media_group(camera_config, group, media_type):
         exts = _PICTURE_EXTS
 
     else:  # media_type == 'movie'
-        exts = _MOVIE_EXTS + ['.thumb']
+        exts = _MOVIE_EXTS
 
     target_dir = camera_config.get('target_dir')
     full_path = os.path.join(target_dir, group)
@@ -903,7 +905,7 @@ def del_media_group(camera_config, group, media_type):
 
         except Exception as e:
             logging.error('failed to remove file %(path)s: %(msg)s' % {
-                    'path': full_path, 'msg': unicode(e)})
+                    'path': full_path, 'msg': utils.make_str(e)})
 
             raise
 
@@ -921,7 +923,7 @@ def del_media_group(camera_config, group, media_type):
 
 
 def get_current_picture(camera_config, width, height):
-    import mjpgclient
+    from motioneye import mjpgclient
 
     jpg = mjpgclient.get_jpg(camera_config['@id'])
 
@@ -931,7 +933,7 @@ def get_current_picture(camera_config, width, height):
     if width is height is None:
         return jpg  # no server-side resize needed
 
-    sio = StringIO.StringIO(jpg)
+    sio = StringIO(jpg)
     image = Image.open(sio)
 
     if width and width < 1:  # given as percent
@@ -954,7 +956,7 @@ def get_current_picture(camera_config, width, height):
 
     image.thumbnail((width, height), Image.CUBIC)
 
-    sio = StringIO.StringIO()
+    sio = StringIO()
     image.save(sio, format='JPEG')
 
     return sio.getvalue()

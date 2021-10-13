@@ -24,18 +24,19 @@ import os.path
 import re
 import shlex
 import subprocess
-import urlparse
+import six
 
+from six.moves.urllib import parse as urlparse
 from tornado.ioloop import IOLoop
 
-import diskctl
-import motionctl
-import powerctl
-import settings
-import tasks
-import uploadservices
-import utils
-import v4l2ctl
+from motioneye import diskctl
+from motioneye import motionctl
+from motioneye import powerctl
+from motioneye import settings
+from motioneye import tasks
+from motioneye import uploadservices
+from motioneye import utils
+from motioneye import v4l2ctl
 
 _CAMERA_CONFIG_FILE_NAME = 'camera-%(id)s.conf'
 _MAIN_CONFIG_FILE_NAME = 'motion.conf'
@@ -63,7 +64,6 @@ _USED_MOTION_OPTIONS = {
     'locate_motion_mode',
     'locate_motion_style',
     'mask_file',
-    'mask_privacy',
     'movie_codec',
     'movie_filename',
     'movie_max_time',
@@ -144,7 +144,7 @@ _MOTION_POST_TO_PRE_42_OPTIONS_MAPPING = {
     'picture_output_motion': 'output_debug_pictures',
     'picture_quality': 'quality',
     'netcam_use_tcp': 'rtsp_uses_tcp',
-    'text_scale': lambda v, data: {'text_double': True if v > 1 else False},
+    'text_scale': lambda v, data: {'text_double': True if int(v) > 1 else False},
     'webcontrol_interface': lambda v, data: {'webcontrol_html_output': bool(v)},
     'webcontrol_parms': None
 }
@@ -173,10 +173,6 @@ def additional_config(func):
     _additional_config_funcs.append(func)
 
 
-import wifictl  # unused import
-import tzctl  # unused import
-
-
 def get_main(as_lines=False):
     global _main_config_cache
 
@@ -200,7 +196,7 @@ def get_main(as_lines=False):
 
         else:
             logging.error('could not open main config file %(path)s: %(msg)s' % {
-                'path': config_file_path, 'msg': unicode(e)})
+                'path': config_file_path, 'msg': six.u(e)})
 
             raise
 
@@ -210,7 +206,7 @@ def get_main(as_lines=False):
 
         except Exception as e:
             logging.error('could not read main config file %(path)s: %(msg)s' % {
-                'path': config_file_path, 'msg': unicode(e)})
+                'path': config_file_path, 'msg': six.u(e)})
 
             raise
 
@@ -238,7 +234,7 @@ def set_main(main_config):
     global _main_config_cache
 
     main_config = dict(main_config)
-    for n, v in _main_config_cache.iteritems():
+    for n, v in six.iteritems(_main_config_cache):
         main_config.setdefault(n, v)
     _main_config_cache = main_config
 
@@ -262,7 +258,7 @@ def set_main(main_config):
 
     except Exception as e:
         logging.error('could not open main config file %(path)s for writing: %(msg)s' % {
-            'path': config_file_path, 'msg': unicode(e)})
+            'path': config_file_path, 'msg': six.u(e)})
 
         raise
 
@@ -273,7 +269,7 @@ def set_main(main_config):
 
     except Exception as e:
         logging.error('could not write main config file %(path)s: %(msg)s' % {
-            'path': config_file_path, 'msg': unicode(e)})
+            'path': config_file_path, 'msg': six.u(e)})
 
         raise
 
@@ -296,7 +292,7 @@ def get_camera_ids(filter_valid=True):
 
     except Exception as e:
         logging.error('failed to list config dir %(path)s: %(msg)s', {
-            'path': config_path, 'msg': unicode(e)})
+            'path': config_path, 'msg': six.u(e)})
 
         raise
 
@@ -371,7 +367,7 @@ def get_camera(camera_id, as_lines=False):
         f = open(camera_config_path, 'r')
 
     except Exception as e:
-        logging.error('could not open camera config file: %(msg)s' % {'msg': unicode(e)})
+        logging.error('could not open camera config file: %(msg)s' % {'msg': six.u(e)})
 
         raise
 
@@ -380,7 +376,7 @@ def get_camera(camera_id, as_lines=False):
 
     except Exception as e:
         logging.error('could not read camera config file %(path)s: %(msg)s' % {
-            'path': camera_config_path, 'msg': unicode(e)})
+            'path': camera_config_path, 'msg': six.u(e)})
 
         raise
 
@@ -393,7 +389,11 @@ def get_camera(camera_id, as_lines=False):
     camera_config = _conf_to_dict(lines,
                                   no_convert=['@network_share_name', '@network_smb_ver', '@network_server',
                                               '@network_username', '@network_password', '@storage_device',
-                                              '@upload_server', '@upload_username', '@upload_password'])
+                                              '@upload_server', '@upload_username', '@upload_password',
+                                              '@telegram_notifications_enabled', '@telegram_send_picture',
+                                              '@telegram_send_movie', '@telegram_notifications_api_token',
+                                              '@telegram_notifications_chatid', '@object_detection',
+                                              '@telegram_notifications_picture_time_span'])
 
     if utils.is_local_motion_camera(camera_config):
         # determine the enabled status
@@ -476,7 +476,7 @@ def set_camera(camera_id, camera_config):
 
     except Exception as e:
         logging.error('could not open camera config file %(path)s for writing: %(msg)s' % {
-            'path': camera_config_path, 'msg': unicode(e)})
+            'path': camera_config_path, 'msg': six.u(e)})
 
         raise
 
@@ -487,7 +487,7 @@ def set_camera(camera_id, camera_config):
 
     except Exception as e:
         logging.error('could not write camera config file %(path)s: %(msg)s' % {
-            'path': camera_config_path, 'msg': unicode(e)})
+            'path': camera_config_path, 'msg': six.u(e)})
 
         raise
 
@@ -565,7 +565,6 @@ def add_camera(device_details):
 
     if utils.is_local_motion_camera(camera_config):
         _set_default_motion_camera(camera_id, camera_config)
-
         # go through the config conversion functions back and forth once
         camera_config = motion_camera_ui_to_dict(motion_camera_dict_to_ui(camera_config), camera_config)
 
@@ -611,7 +610,7 @@ def rem_camera(camera_id):
 
     except Exception as e:
         logging.error('could not remove camera config file %(path)s: %(msg)s' % {
-            'path': camera_config_path, 'msg': unicode(e)})
+            'path': camera_config_path, 'msg': six.u(e)})
 
         raise
 
@@ -651,7 +650,7 @@ def main_ui_to_dict(ui):
         call_hook(ui['normal_username'], ui['normal_password'])
 
     # additional configs
-    for name, value in ui.iteritems():
+    for name, value in six.iteritems(ui):
         if not name.startswith('_'):
             continue
 
@@ -681,7 +680,7 @@ def main_dict_to_ui(data):
         ui['normal_password'] = ''
 
     # additional configs
-    for name, value in data.iteritems():
+    for name, value in six.iteritems(data):
         if not name.startswith('@_'):
             continue
 
@@ -691,8 +690,8 @@ def main_dict_to_ui(data):
 
 
 def motion_camera_ui_to_dict(ui, prev_config=None):
-    import meyectl
-    import smbctl
+    from motioneye import meyectl
+    from motioneye import smbctl
 
     prev_config = dict(prev_config or {})
     main_config = get_main()  # needed for surveillance password
@@ -704,7 +703,6 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
         'auto_brightness': ui['auto_brightness'],
         'framerate': int(ui['framerate']),
         'rotate': int(ui['rotation']),
-        'mask_privacy': '',
 
         # file storage
         '@storage_device': ui['storage_device'],
@@ -725,6 +723,15 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
         '@upload_username': ui['upload_username'],
         '@upload_password': ui['upload_password'],
         '@clean_cloud_enabled': ui['clean_cloud_enabled'],
+
+        # telegram
+        '@telegram_notifications_enabled': ui['telegram_notifications_enabled'],
+        '@telegram_send_picture': ui['telegram_send_picture'],
+        '@telegram_send_movie': ui['telegram_send_movie'],
+        '@telegram_notifications_api_token': ui['telegram_notifications_api_token'],
+        '@telegram_notifications_chatid': ui['telegram_notifications_chatid'],
+        '@telegram_notifications_picture_time_span': ui['telegram_notifications_picture_time_span'],
+        '@object_detection': ui['object_detection'],
 
         # text overlay
         'text_left': '',
@@ -831,14 +838,6 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
     data['threshold'] = threshold
 
 
-    if ui['privacy_mask']:
-        capture_width, capture_height = data.get('width'), data.get('height')
-        if data.get('rotate') in [90, 270]:
-            capture_width, capture_height = capture_height, capture_width
-
-        data['mask_privacy'] = utils.build_editable_mask_file(prev_config['@id'], 'privacy', ui['privacy_mask_lines'],
-                                                            capture_width, capture_height)
-
     if (ui['storage_device'] == 'network-share') and settings.SMB_SHARES:
         mount_point = smbctl.make_mount_point(ui['network_server'], ui['network_share_name'], ui['network_username'])
         if ui['root_directory'].startswith('/'):
@@ -871,7 +870,7 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
             logging.error('failed to create root directory "%s": %s' % (data['target_dir'], e), exc_info=True)
 
     if ui['upload_enabled'] and '@id' in prev_config:
-        upload_settings = {k[7:]: ui[k] for k in ui.iterkeys() if k.startswith('upload_')}
+        upload_settings = {k[7:]: ui[k] for k in six.iterkeys(ui) if k.startswith('upload_')}
 
         tasks.add(0, uploadservices.update, tag='uploadservices.update(%s)' % ui['upload_service'],
                   camera_id=prev_config['@id'], service_name=ui['upload_service'], settings=upload_settings)
@@ -947,17 +946,26 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
     else:
         data['despeckle_filter'] = ''
 
-    if ui['motion_mask']:
-        if ui['motion_mask_type'] == 'smart':
-            data['smart_mask_speed'] = 11 - int(ui['smart_mask_sluggishness'])
+    if ui['mask']:
+        if ui['mask_type'] == 'smart':
+            data['smart_mask_speed'] = 10 - int(ui['smart_mask_sluggishness'])
 
-        elif ui['motion_mask_type'] == 'editable':
+        elif ui['mask_type'] == 'editable':
             capture_width, capture_height = data.get('width'), data.get('height')
             if data.get('rotate') in [90, 270]:
                 capture_width, capture_height = capture_height, capture_width
 
-            data['mask_file'] = utils.build_editable_mask_file(prev_config['@id'], 'motion', ui['motion_mask_lines'],
+            data['mask_file'] = utils.build_editable_mask_file(prev_config['@id'], ui['mask_lines'],
                                                                capture_width, capture_height)
+    # telegram
+    if ui['telegram_notifications_enabled']:
+        data['@telegram_notifications_enabled'] = ui['telegram_notifications_enabled']
+        data['@telegram_send_picture'] = ui['telegram_send_picture']
+        data['@telegram_send_movie'] = ui['telegram_send_movie']
+        data['@telegram_notifications_api_token'] = ui['telegram_notifications_api_token']
+        data['@telegram_notifications_chatid'] = ui['telegram_notifications_chatid']
+        data['@telegram_notifications_picture_time_span'] = int(ui['telegram_notifications_picture_time_span'])
+        data['@object_detection'] = ui['object_detection']
 
     # working schedule
     if ui['working_schedule']:
@@ -1007,16 +1015,6 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
     # event end
     on_event_end = ['%(script)s stop %%t' % {'script': meyectl.find_command('relayevent')}]
 
-    if ui['telegram_notifications_enabled']:
-        line = "%(script)s '%(api)s' '%(chatid)s' " \
-               "'motion_start' '%%t' '%%Y-%%m-%%dT%%H:%%M:%%S' '%(timespan)s'" % {
-                   'script': meyectl.find_command('sendtelegram'),
-                   'api': ui['telegram_notifications_api'],
-                   'chatid': ui['telegram_notifications_chat_id'],
-                   'timespan': ui['telegram_notifications_picture_time_span']}
-
-        on_event_end.append(line)
-
     if ui['command_end_notifications_enabled']:
         on_event_end += utils.split_semicolon(ui['command_end_notifications_exec'])
 
@@ -1055,14 +1053,14 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
     data['on_picture_save'] = '; '.join(on_picture_save)
 
     # additional configs
-    for name, value in ui.iteritems():
+    for name, value in six.iteritems(ui):
         if not name.startswith('_'):
             continue
 
         data['@' + name] = value
 
     # extra motion options
-    for name in prev_config.keys():
+    for name in list(prev_config.keys()):
         if name not in _USED_MOTION_OPTIONS and not name.startswith('@'):
             prev_config.pop(name)
 
@@ -1076,7 +1074,7 @@ def motion_camera_ui_to_dict(ui, prev_config=None):
 
 
 def motion_camera_dict_to_ui(data):
-    import smbctl
+    from motioneye import smbctl
 
     ui = {
         # device
@@ -1086,8 +1084,6 @@ def motion_camera_dict_to_ui(data):
         'auto_brightness': data['auto_brightness'],
         'framerate': int(data['framerate']),
         'rotation': int(data['rotate']),
-        'privacy_mask': False,
-        'privacy_mask_lines': [],
 
         # file storage
         'smb_shares': settings.SMB_SHARES,
@@ -1115,6 +1111,15 @@ def motion_camera_dict_to_ui(data):
         'clean_cloud_enabled': data['@clean_cloud_enabled'],
         'web_hook_storage_enabled': False,
         'command_storage_enabled': False,
+
+        # telegram
+        'telegram_notifications_enabled': data['@telegram_notifications_enabled'],
+        'telegram_send_picture': data['@telegram_send_picture'],
+        'telegram_send_movie': data['@telegram_send_movie'],
+        'telegram_notifications_api_token': data['@telegram_notifications_api_token'],
+        'telegram_notifications_chatid': data['@telegram_notifications_chatid'],
+        'telegram_notifications_picture_time_span': int(data['@telegram_notifications_picture_time_span']),
+        'object_detection': data['@object_detection'],
 
         # text overlay
         'text_overlay': False,
@@ -1163,15 +1168,14 @@ def motion_camera_dict_to_ui(data):
         'pre_capture': int(data['pre_capture']),
         'post_capture': int(data['post_capture']),
         'minimum_motion_frames': int(data['minimum_motion_frames']),
-        'motion_mask': False,
-        'motion_mask_type': 'smart',
+        'mask': False,
+        'mask_type': 'smart',
         'smart_mask_sluggishness': 5,
-        'motion_mask_lines': [],
+        'mask_lines': [],
         'create_debug_media': data['movie_output_motion'] or data['picture_output_motion'],
 
         # motion notifications
         'email_notifications_enabled': False,
-        'telegram_notifications_enabled': False,
         'web_hook_notifications_enabled': False,
         'command_notifications_enabled': False,
         'command_end_notifications_enabled': False,
@@ -1366,30 +1370,21 @@ def motion_camera_dict_to_ui(data):
     ui['movie_format'] = data['movie_codec']
     ui['movie_quality'] = data['movie_quality']
 
-    # masks
+    # mask
     if data['mask_file']:
-        ui['motion_mask'] = True
-        ui['motion_mask_type'] = 'editable'
+        ui['mask'] = True
+        ui['mask_type'] = 'editable'
 
         capture_width, capture_height = data.get('width'), data.get('height')
         if int(data.get('rotate')) in [90, 270]:
             capture_width, capture_height = capture_height, capture_width
 
-        ui['motion_mask_lines'] = utils.parse_editable_mask_file(data['@id'], 'motion', capture_width, capture_height)
+        ui['mask_lines'] = utils.parse_editable_mask_file(data['@id'], capture_width, capture_height)
 
     elif data['smart_mask_speed']:
-        ui['motion_mask'] = True
-        ui['motion_mask_type'] = 'smart'
-        ui['smart_mask_sluggishness'] = 11 - data['smart_mask_speed']
-
-    if data['mask_privacy']:
-        ui['privacy_mask'] = True
-
-        capture_width, capture_height = data.get('width'), data.get('height')
-        if int(data.get('rotate')) in [90, 270]:
-            capture_width, capture_height = capture_height, capture_width
-
-        ui['privacy_mask_lines'] = utils.parse_editable_mask_file(data['@id'], 'privacy', capture_width, capture_height)
+        ui['mask'] = True
+        ui['mask_type'] = 'smart'
+        ui['smart_mask_sluggishness'] = 10 - data['smart_mask_speed']
 
     # working schedule
     working_schedule = data['@working_schedule']
@@ -1405,13 +1400,17 @@ def motion_camera_dict_to_ui(data):
         ui['sunday_from'], ui['sunday_to'] = days[6].split('-')
         ui['working_schedule_type'] = data['@working_schedule_type']
 
+    if data['@telegram_notifications_enabled']:
+        ui['telegram_notifications_enabled'] = True if data['@telegram_notifications_enabled'] == 'on' else False
+        ui['telegram_send_picture'] = True if data['@telegram_send_picture'] == 'on' else False
+        ui['telegram_send_movie'] = True if data['@telegram_send_movie'] == 'on' else False
+
     # event start
     on_event_start = data.get('on_event_start') or []
     if on_event_start:
         on_event_start = utils.split_semicolon(on_event_start)
 
     ui['email_notifications_picture_time_span'] = 0
-    ui['telegram_notifications_picture_time_span'] = 0
     command_notifications = []
     for e in on_event_start:
         if e.count(' sendmail '):
@@ -1435,23 +1434,8 @@ def motion_camera_dict_to_ui(data):
             try:
                 ui['email_notifications_picture_time_span'] = int(e[-1])
 
-            except:
+            except ValueError:
                 ui['email_notifications_picture_time_span'] = 0
-
-        elif e.count(' sendtelegram '):
-            e = shlex.split(utils.make_str(e)) # poor shlex can't deal with unicode properly
-
-            if len(e) < 7:
-                continue
-
-            ui['telegram_notifications_enabled'] = True
-            ui['telegram_notifications_api'] = e[-6]
-            ui['telegram_notifications_chat_id'] = e[-5]
-            try:
-                ui['telegram_notifications_picture_time_span'] = int(e[-1])
-
-            except:
-                ui['telegram_notifications_picture_time_span'] = 0
 
         elif e.count(' webhook '):
             e = shlex.split(utils.make_str(e)) # poor shlex can't deal with unicode properly
@@ -1518,7 +1502,7 @@ def motion_camera_dict_to_ui(data):
         ui['command_storage_exec'] = '; '.join(command_storage)
 
     # additional configs
-    for name, value in data.iteritems():
+    for name, value in six.iteritems(data):
         if not name.startswith('@_'):
             continue
 
@@ -1526,7 +1510,7 @@ def motion_camera_dict_to_ui(data):
 
     # extra motion options
     extra_options = []
-    for name, value in data.iteritems():
+    for name, value in six.iteritems(data):
         if name not in _USED_MOTION_OPTIONS and not name.startswith('@'):
             if isinstance(value, bool):
                 value = ['off', 'on'][value]  # boolean values should be transferred as on/off
@@ -1537,7 +1521,9 @@ def motion_camera_dict_to_ui(data):
 
     # action commands
     action_commands = get_action_commands(data)
-    ui['actions'] = action_commands.keys()
+    ui['actions'] = list(action_commands.keys())
+
+    #print(ui)
 
     return ui
 
@@ -1552,7 +1538,7 @@ def simple_mjpeg_camera_ui_to_dict(ui, prev_config=None):
     }
 
     # additional configs
-    for name, value in ui.iteritems():
+    for name, value in six.iteritems(ui):
         if not name.startswith('_'):
             continue
 
@@ -1573,7 +1559,7 @@ def simple_mjpeg_camera_dict_to_ui(data):
     }
 
     # additional configs
-    for name, value in data.iteritems():
+    for name, value in six.iteritems(data):
         if not name.startswith('@_'):
             continue
 
@@ -1581,7 +1567,7 @@ def simple_mjpeg_camera_dict_to_ui(data):
 
     # action commands
     action_commands = get_action_commands(data)
-    ui['actions'] = action_commands.keys()
+    ui['actions'] = list(action_commands.keys())
 
     return ui
 
@@ -1846,7 +1832,7 @@ def _dict_to_conf(lines, data, list_names=None):
     if len(remaining) and len(lines):
         conf_lines.append('')  # add a blank line
 
-    for (name, value) in remaining.iteritems():
+    for (name, value) in six.iteritems(remaining):
         if name.startswith('@_'):
             continue  # ignore additional configs
 
@@ -1910,7 +1896,6 @@ def _set_default_motion_camera(camera_id, data):
     data.setdefault('auto_brightness', False)
     data.setdefault('framerate', 2)
     data.setdefault('rotate', 0)
-    data.setdefault('mask_privacy', '')
 
     data.setdefault('@storage_device', 'custom-path')
     data.setdefault('@network_server', '')
@@ -1931,6 +1916,14 @@ def _set_default_motion_camera(camera_id, data):
     data.setdefault('@upload_username', '')
     data.setdefault('@upload_password', '')
     data.setdefault('@clean_cloud_enabled', False)
+
+    data.setdefault('@telegram_notifications_enabled', False)
+    data.setdefault('@telegram_send_movie', False)
+    data.setdefault('@telegram_send_picture', False)
+    data.setdefault('@telegram_notifications_api_token', '')
+    data.setdefault('@telegram_notifications_chatid', '')
+    data.setdefault('@telegram_notifications_picture_time_span', 0)
+    data.setdefault('@object_detection', '')
 
     data.setdefault('stream_localhost', False)
     data.setdefault('stream_port', 8080 + camera_id)
@@ -2030,8 +2023,8 @@ def get_additional_structure(camera, separators=False):
             if bool(result.get('camera')) != bool(camera):
                 continue
 
-            result['name'] = func.func_name
-            sections[func.func_name] = result
+            result['name'] = func.__name__
+            sections[func.__name__] = result
 
             logging.debug('additional config section: %s' % result['name'])
 
@@ -2050,8 +2043,8 @@ def get_additional_structure(camera, separators=False):
             if result['type'] == 'separator' and not separators:
                 continue
 
-            result['name'] = func.func_name
-            configs[func.func_name] = result
+            result['name'] = func.__name__
+            configs[func.__name__] = result
 
             section = sections.setdefault(result.get('section'), {})
             section.setdefault('configs', []).append(result)
@@ -2067,10 +2060,10 @@ def _get_additional_config(data, camera_id=None):
     args = [camera_id] if camera_id else []
 
     (sections, configs) = get_additional_structure(camera=bool(camera_id))
-    get_funcs = set([c.get('get') for c in configs.itervalues() if c.get('get')])
+    get_funcs = set([c.get('get') for c in six.itervalues(configs) if c.get('get')])
     get_func_values = collections.OrderedDict((f, f(*args)) for f in get_funcs)
 
-    for name, section in sections.iteritems():
+    for name, section in six.iteritems(sections):
         if not section.get('get'):
             continue
 
@@ -2080,7 +2073,7 @@ def _get_additional_config(data, camera_id=None):
         else:
             data['@_' + name] = get_func_values.get(section['get'])
 
-    for name, config in configs.iteritems():
+    for name, config in six.iteritems(configs):
         if not config.get('get'):
             continue
 
@@ -2097,7 +2090,7 @@ def _set_additional_config(data, camera_id=None):
     (sections, configs) = get_additional_structure(camera=bool(camera_id))
 
     set_func_values = collections.OrderedDict()
-    for name, section in sections.iteritems():
+    for name, section in six.iteritems(sections):
         if not section.get('set'):
             continue
 
@@ -2110,7 +2103,7 @@ def _set_additional_config(data, camera_id=None):
         else:
             set_func_values[section['set']] = data['@_' + name]
 
-    for name, config in configs.iteritems():
+    for name, config in six.iteritems(configs):
         if not config.get('set'):
             continue
 
@@ -2123,5 +2116,5 @@ def _set_additional_config(data, camera_id=None):
         else:
             set_func_values[config['set']] = data['@_' + name]
 
-    for func, value in set_func_values.iteritems():
+    for func, value in six.iteritems(set_func_values):
         func(*(args + [value]))

@@ -24,7 +24,7 @@ import smtplib
 import socket
 import time
 
-from email import Encoders
+from email.encoders import encode_base64
 from email.mime.text import MIMEText
 from email.MIMEMultipart import MIMEMultipart
 from email.MIMEBase import MIMEBase
@@ -32,12 +32,11 @@ from email.Utils import formatdate
 
 from tornado.ioloop import IOLoop
 
-import settings
-
-import config
-import mediafiles
-import motionctl
-import tzctl
+from motioneye import config
+from motioneye import mediafiles
+from motioneye import motionctl
+from motioneye import settings
+from motioneye import tzctl
 
 
 messages = {
@@ -69,7 +68,7 @@ def send_mail(server, port, account, password, tls, _from, to, subject, message,
         with open(name, 'rb') as f:
             part.set_payload(f.read())
         
-        Encoders.encode_base64(part)
+        encode_base64(part)
         part.add_header('Content-Disposition', 'attachment; filename="%s"' % os.path.basename(name))
         email.attach(part)
     
@@ -164,7 +163,7 @@ def parse_options(parser, args):
     
 
 def main(parser, args):
-    import meyectl
+    from motioneye import meyectl
     
     # the motion daemon overrides SIGCHLD,
     # so we must restore it here,
