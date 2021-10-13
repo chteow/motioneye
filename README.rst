@@ -1,6 +1,11 @@
 **motionEye** is a web-based frontend for `motion <https://motion-project.github.io>`_. Check out the `wiki <https://github.com/ccrisan/motioneye/wiki>`_ for more details. Changelog is available on the `releases page <https://github.com/ccrisan/motioneye/releases>`_.
 
 
+   New with telegram notification.
+   ** Requests cv2 module ** 
+   Darknet objects detection - like person, dog, cat, car .... to filter telegram notification from sending nothing at all.
+
+
 .. image:: https://badges.gitter.im/Join%20Chat.svg
    :alt: Join the chat at https://gitter.im/ccrisan/motioneye
    :target: https://gitter.im/ccrisan/motioneye?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge
